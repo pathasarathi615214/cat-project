@@ -1,6 +1,10 @@
 """Webhook integration stubs for capturing real-world CI logs (GitHub Actions / GitLab CI).
 
 Satisfies legacy coexistence requirement by translating external CI payloads into Build and Task schemas.
+
+Error Boundaries:
+- Catches payload KeyError / ValueError exceptions during ISO timestamp parsing or field extraction.
+- Returns HTTP 400 Bad Request with explicit error context without corrupting DB transactions.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body
@@ -18,7 +22,11 @@ router = APIRouter()
 def github_actions_webhook(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     """Receive and translate a GitHub Actions workflow_run webhook event.
 
-    Translates GitHub Actions JSON payload into normalized BuildSchema and ingests it.
+    Maps GitHub payload attributes:
+    - workflow_run.id -> build_id (prefixed 'gh-')
+    - repository.name -> service_name
+    - workflow_run.name -> pipeline_name
+    - workflow_run.conclusion -> status ('success', 'failed', 'cancelled', 'timed_out')
     """
     try:
         workflow_run = payload.get("workflow_run", payload)
@@ -26,7 +34,7 @@ def github_actions_webhook(payload: Dict[str, Any] = Body(...), db: Session = De
         service_name = payload.get("repository", {}).get("name", "github-repo")
         pipeline_name = workflow_run.get("name", "github-actions")
         
-        # Map GitHub status/conclusion
+        # Map GitHub status/conclusion strings to normalized status values
         conclusion = workflow_run.get("conclusion") or workflow_run.get("status") or "success"
         status_str = "success" if conclusion == "success" else "failed"
         if conclusion in ["cancelled", "timed_out"]:
@@ -47,13 +55,18 @@ def github_actions_webhook(payload: Dict[str, Any] = Body(...), db: Session = De
         )
         return ingest_build(db, build)
     except Exception as e:
+        # Error Boundary: return 400 Bad Request for malformed webhook JSON
         raise HTTPException(status_code=400, detail=f"Failed to parse GitHub webhook payload: {str(e)}")
 
 @router.post("/gitlab", response_model=BuildSchema, status_code=status.HTTP_201_CREATED)
 def gitlab_ci_webhook(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     """Receive and translate a GitLab CI Pipeline webhook event.
 
-    Translates GitLab CI JSON payload into normalized BuildSchema and ingests it.
+    Maps GitLab payload attributes:
+    - object_attributes.id -> build_id (prefixed 'gl-')
+    - project.name -> service_name
+    - object_attributes.ref -> pipeline_name
+    - object_attributes.status -> status ('success', 'failed', 'aborted')
     """
     try:
         object_attrs = payload.get("object_attributes", payload)
@@ -82,4 +95,5 @@ def gitlab_ci_webhook(payload: Dict[str, Any] = Body(...), db: Session = Depends
         )
         return ingest_build(db, build)
     except Exception as e:
+        # Error Boundary: return 400 Bad Request for malformed webhook JSON
         raise HTTPException(status_code=400, detail=f"Failed to parse GitLab webhook payload: {str(e)}")

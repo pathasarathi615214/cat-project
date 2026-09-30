@@ -1,3 +1,13 @@
+"""Parallelisation analysis & DAG critical path calculation service.
+
+Analyses task dependency graphs using Directed Acyclic Graph (DAG) longest-path searching
+to compute theoretical minimum execution bounds and identify parallelisation opportunities.
+
+Algorithmic Complexity & Safety:
+- Time Complexity: O(V + E) with memoization over task graph vertices V and dependency edges E.
+- Error Boundaries: Returns default fallback dict (efficiency = 1.0) when tasks list is empty.
+"""
+
 from sqlalchemy.orm import Session
 from ..models.task import Task
 from typing import List, Dict, Any
