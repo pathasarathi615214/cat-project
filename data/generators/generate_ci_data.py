@@ -25,7 +25,8 @@ def generate_builds():
         build_id = f"build_{i+1:04d}"
         service_name = random.choice(["auth", "payments", "orders", "notifications"])
         pipeline_name = random.choice(["dev", "staging", "prod"])
-        status = random.choice(["success", "failed"])
+        # Include edge case statuses: aborted and timed_out
+        status = random.choice(["success", "success", "success", "failed", "aborted", "timed_out"])
         queued_at = datetime.utcnow() - timedelta(minutes=random.randint(10, 120))
         started_at = queued_at + timedelta(seconds=random.randint(30, 300))
         finished_at = started_at + timedelta(seconds=random.randint(60, 600))
@@ -76,11 +77,13 @@ if __name__ == "__main__":
     # Queue metrics
     queue_rows = [[b[0], b[7]] for b in builds]
     write_csv(os.path.join(RAW_DIR, "queue_metrics.csv"), ["build_id", "queue_time_seconds"], queue_rows)
-    # Agent utilisation (random example)
+    # Agent utilisation (includes high memory / OOM scenarios)
     agents = []
     for i in range(5):
         agent_id = f"agent_{i+1}"
-        utilisation = random.uniform(0.4, 0.95)
-        agents.append([agent_id, utilisation])
-    write_csv(os.path.join(RAW_DIR, "agent_utilisation.csv"), ["agent_id", "utilisation"], agents)
+        cpu_utilisation = random.uniform(0.4, 0.95)
+        # Agent 4 & 5 simulate high memory/OOM pressure (>3800MB out of 4096MB)
+        memory_mb = random.uniform(3800.0, 4096.0) if i >= 3 else random.uniform(1024.0, 2500.0)
+        agents.append([agent_id, cpu_utilisation, memory_mb])
+    write_csv(os.path.join(RAW_DIR, "agent_utilisation.csv"), ["agent_id", "cpu_utilisation", "memory_utilisation_mb"], agents)
     print(f"Synthetic data generated in {RAW_DIR}")

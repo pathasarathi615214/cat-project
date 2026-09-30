@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from ..models.build import Build
 from ..schemas.build import BuildSchema
 
+from datetime import datetime
+
 def ingest_build(db: Session, build_data: BuildSchema) -> Build:
     db_build = Build(
         build_id=build_data.build_id,
@@ -20,7 +22,7 @@ def ingest_build(db: Session, build_data: BuildSchema) -> Build:
         queue_time_seconds=build_data.queue_time_seconds,
         execution_time_seconds=build_data.execution_time_seconds,
         feedback_time_seconds=build_data.feedback_time_seconds,
-        created_at=build_data.created_at,
+        created_at=build_data.created_at or datetime.utcnow(),
     )
     db.add(db_build)
     db.commit()

@@ -7,7 +7,7 @@ import uvicorn
 from fastapi import FastAPI
 from .config import DB_URL
 from .database import Base, engine
-from .api import builds, analysis, recommendations, metrics, experiments
+from .api import builds, analysis, recommendations, metrics, experiments, webhooks
 
 app = FastAPI(title="CI Bottleneck Analyser")
 
@@ -17,6 +17,7 @@ app.include_router(analysis.router, prefix="/analysis", tags=["Analysis"])
 app.include_router(recommendations.router, prefix="/recommendations", tags=["Recommendations"])
 app.include_router(metrics.router, prefix="/metrics", tags=["Metrics"])
 app.include_router(experiments.router, prefix="/experiments", tags=["Experiments"])
+app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
 
 # Create tables on startup
 @app.on_event("startup")

@@ -89,9 +89,45 @@ def analyze_builds(db: Session) -> AnalysisResultSchema:
                 )
             )
 
-    # Parallelisation inefficiency – very simple heuristic: many tasks sequentially with same start time
-    # (Placeholder for real analysis)
-    # ... omitted for brevity ...
+    # Parallelisation inefficiency – run DAG critical path analysis
+    from .parallelisation_service import detect_parallelisation_issues
+    parallel_issues = detect_parallelisation_issues(db, latest_build.build_id)
+    for issue in parallel_issues:
+        bottlenecks.append(
+            BottleneckDetail(
+                type="Parallelisation Inefficiency",
+                description=issue["description"],
+                severity="medium",
+                suggestion=issue["suggestion"],
+                evidence={"critical_path": issue["critical_path"], "duration": issue["critical_path_duration"]},
+            )
+        )
+
+    # Build status edge case (Aborted / Timed-out / Failed builds)
+    if latest_build.status in ["aborted", "timed_out", "failed"]:
+        bottlenecks.append(
+            BottleneckDetail(
+                type="Build Failure / Timeout",
+                description=f"Build ended with status '{latest_build.status.upper()}'.",
+                severity="high",
+                suggestion="Inspect build log output for timeouts, script crashes, or cancelled jobs.",
+                evidence={"status": latest_build.status, "build_id": latest_build.build_id},
+            )
+        )
+
+    # Agent memory / OOM saturation bottleneck
+    if agents:
+        oom_agents = [a for a in agents if a.memory_utilisation_mb and a.memory_utilisation_mb > 3500]
+        if oom_agents:
+            bottlenecks.append(
+                BottleneckDetail(
+                    type="Agent Memory Saturation / OOM Risk",
+                    description=f"{len(oom_agents)} agent runner(s) experienced near-OOM memory consumption (>3.5GB).",
+                    severity="high",
+                    suggestion="Increase runner RAM allocation or optimize memory consumption during test steps.",
+                    evidence={"saturated_agent_count": len(oom_agents)},
+                )
+            )
 
     # Store recommendations based on detected bottlenecks
     for b in bottlenecks:
